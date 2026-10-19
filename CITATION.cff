@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use plumefit, please cite it as below."
+title: "plumefit: trace-gas plume retrievals for drone and satellite imaging spectrometers"
+type: software
+authors:
+  - alias: naikp13
+license: Apache-2.0
+repository-code: "https://github.com/naikp13/plumefit"
+version: 0.1.0
+date-released: 2026-10-19
+keywords:
+  - imaging spectroscopy
+  - methane
+  - optimal estimation
+  - DOAS
+  - ISOFIT

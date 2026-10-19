@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "plumefit"
+version = "0.1.0"
+description = "Trace-gas plume retrievals (CH4, CO2, NO2, SO2) for drone and satellite imaging spectrometers, designed to complement ISOFIT"
+readme = "README.md"
+license = {text = "Apache-2.0"}
+requires-python = ">=3.10"
+dependencies = ["numpy>=2.0", "scipy>=1.11"]
+keywords = ["hyperspectral", "imaging spectroscopy", "methane", "atmospheric correction", "isofit", "optimal estimation", "DOAS", "remote sensing"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Topic :: Scientific/Engineering :: Atmospheric Science",
+]
+
+[project.optional-dependencies]
+hitran = ["hitran-api"]
+plot = ["matplotlib>=3.7"]
+isofit = ["isofit"]
+dev = ["pytest>=7", "ruff", "matplotlib>=3.7"]
+
+[project.scripts]
+plumefit = "plumefit.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore:SpectralDatabase uses synthetic"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "NPY"]
