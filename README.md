@@ -1,6 +1,6 @@
 # hyperatmos
 
-**Radiative transfer and atmospheric correction for drone and satellite imaging spectrometers, interoperable with [ISOFIT](https://github.com/isofit/isofit).**
+**Radiative transfer and atmospheric correction for drone and satellite imaging spectrometers.**
 
 [![CI](https://github.com/naikp13/hyperatmos/actions/workflows/ci.yml/badge.svg)](https://github.com/naikp13/hyperatmos/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.10%E2%80%933.13-blue)
