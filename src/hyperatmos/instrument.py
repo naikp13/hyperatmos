@@ -1,7 +1,7 @@
-"""Instrument models: spectral response, noise, and sensor presets.
+"""Instrument models: spectral response, noise, and sensor presets for drone and satellite imagers.
 
 Band centres/FWHM can be read from an ISOFIT wavelength file, so that the
-same instrument description drives ISOFIT and plumefit.
+same instrument description drives ISOFIT and hyperatmos.
 """
 
 from __future__ import annotations
@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+from scipy import sparse
 
 
 @dataclass
@@ -46,19 +47,32 @@ class Instrument:
             self.wavelength_nm[m], self.fwhm_nm[m], self.snr_ref, self.radiance_ref, self.read_noise_fraction, self.name
         )
 
-    def srf_matrix(self, nu_hires: np.ndarray) -> np.ndarray:
+    def srf_matrix(self, nu_hires: np.ndarray) -> sparse.csr_matrix:
         """Row-normalised Gaussian SRF matrix (n_bands, n_hires) on a wavenumber grid.
 
-        Integration weights account for the non-uniform wavelength spacing of
-        a uniform wavenumber grid, so the matrix averages spectral radiance
-        per unit wavelength.
+        Sparse, truncated at 4 sigma. Integration weights account for the
+        non-uniform wavelength spacing of a uniform wavenumber grid, so the
+        matrix averages spectral radiance per unit wavelength.
         """
         wl = 1e7 / nu_hires
         dwl = np.abs(np.gradient(wl))
-        sigma = self.fwhm_nm[:, None] / (2 * np.sqrt(2 * np.log(2)))
-        w = np.exp(-0.5 * ((wl[None, :] - self.wavelength_nm[:, None]) / sigma) ** 2) * dwl[None, :]
-        w[w < 1e-8 * w.max(axis=1, keepdims=True)] = 0.0
-        return w / w.sum(axis=1, keepdims=True)
+        order = np.argsort(wl)
+        wl_sorted = wl[order]
+        sigma = self.fwhm_nm / (2 * np.sqrt(2 * np.log(2)))
+        rows, cols, vals = [], [], []
+        for b, (c, s) in enumerate(zip(self.wavelength_nm, sigma, strict=True)):
+            lo, hi = np.searchsorted(wl_sorted, [c - 4 * s, c + 4 * s])
+            idx = order[lo:hi]
+            if idx.size == 0:
+                raise ValueError(f"band {c:.1f} nm lies outside the high-resolution grid")
+            w = np.exp(-0.5 * ((wl[idx] - c) / s) ** 2) * dwl[idx]
+            rows.append(np.full(idx.size, b))
+            cols.append(idx)
+            vals.append(w / w.sum())
+        return sparse.csr_matrix(
+            (np.concatenate(vals), (np.concatenate(rows), np.concatenate(cols))),
+            shape=(self.n_bands, nu_hires.size),
+        )
 
     def noise_sigma(self, radiance: np.ndarray) -> np.ndarray:
         """1-sigma noise for a radiance spectrum (shot + read noise)."""
@@ -98,9 +112,10 @@ def uniform_instrument(
 PRESETS = {
     "EMIT": dict(wl_min=380, wl_max=2500, sampling=7.4, fwhm=8.5, snr_ref=300),
     "AVIRIS-NG": dict(wl_min=380, wl_max=2510, sampling=5.0, fwhm=5.5, snr_ref=400),
-    "PRISMA": dict(wl_min=920, wl_max=2500, sampling=10.0, fwhm=10.0, snr_ref=150),
-    "EnMAP": dict(wl_min=900, wl_max=2450, sampling=10.0, fwhm=10.0, snr_ref=180),
-    "drone-swir": dict(wl_min=1600, wl_max=2450, sampling=3.0, fwhm=4.0, snr_ref=250),
+    "PRISMA": dict(wl_min=400, wl_max=2500, sampling=10.0, fwhm=12.0, snr_ref=150),
+    "EnMAP": dict(wl_min=420, wl_max=2450, sampling=8.0, fwhm=10.0, snr_ref=180),
+    "drone-vnir": dict(wl_min=400, wl_max=1050, sampling=2.5, fwhm=3.5, snr_ref=300),
+    "drone-swir": dict(wl_min=950, wl_max=2500, sampling=6.0, fwhm=8.0, snr_ref=250),
 }
 
 

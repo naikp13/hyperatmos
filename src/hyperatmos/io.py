@@ -1,6 +1,6 @@
 """Minimal ENVI raster I/O (the format ISOFIT reads and writes).
 
-Kept dependency-free so plumefit can read ISOFIT products without the
+Kept dependency-free so hyperatmos can read ISOFIT products without the
 ``spectral`` package. Arrays are returned as (lines, samples, bands).
 """
 
@@ -92,7 +92,7 @@ def write_envi(
     band_names: list[str] | None = None,
     fwhm_nm: np.ndarray | None = None,
     interleave: str = "bil",
-    description: str = "plumefit output",
+    description: str = "hyperatmos output",
 ) -> None:
     """Write a (lines, samples, bands) or (lines, samples) array as float32 ENVI."""
     p = Path(path)

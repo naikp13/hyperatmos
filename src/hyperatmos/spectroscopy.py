@@ -1,4 +1,4 @@
-"""Line-by-line absorption cross sections and the high-resolution spectral database.
+"""Gas absorption: line-by-line cross sections and the high-resolution optical-depth database.
 
 Two sources of spectroscopy are supported:
 
@@ -8,11 +8,12 @@ Two sources of spectroscopy are supported:
   :func:`read_hitran_par`. This is what you should use for science.
 * **Synthetic demo line lists** from :func:`demo_linelist`. These are *not*
   real spectroscopy: they mimic the position, rotational structure and depth of
-  the main SWIR bands of CH4, CO2 and H2O so that the package, its tests and its
-  examples run fully offline. Never report numbers derived from them.
+  the main VNIR-SWIR bands of H2O, O2, CO2 and CH4 so that the package, its
+  tests and its examples run fully offline. Never report numbers derived from
+  them.
 
-UV-visible absorbers (NO2, SO2) are described by measured cross-section tables
-rather than line lists; see :class:`CrossSectionTable`.
+Absorbers with broad electronic bands (O3, NO2, SO2) are described by
+cross-section tables rather than line lists; see :class:`CrossSectionTable`.
 """
 
 from __future__ import annotations
@@ -28,9 +29,11 @@ from .atmosphere import Atmosphere
 from .constants import C2, HITRAN_ID, K_BOLTZMANN, MOLAR_MASS, N_AVOGADRO
 
 C_LIGHT = 2.99792458e8
+#: Absorbers described by cross-section tables instead of line lists.
+_XSEC_GASES = ("O3", "NO2", "SO2")
 T_HITRAN = 296.0
 #: Exponent of the power-law approximation Q(T) ~ T**a for the partition function.
-_Q_EXPONENT = {"CO2": 1.0, "CH4": 1.5, "H2O": 1.5, "NO2": 1.5, "SO2": 1.5}
+_Q_EXPONENT = {"CO2": 1.0, "O2": 1.0, "CH4": 1.5, "H2O": 1.5, "NO2": 1.5, "SO2": 1.5}
 
 
 @dataclass
@@ -101,10 +104,10 @@ def fetch_hitran(gas: str, nu_min: float, nu_max: float, out_dir: str | Path = "
 def demo_linelist(gas: str, seed: int = 0) -> LineList:
     """Synthetic, *non-physical* line list for offline demos and tests.
 
-    Band centres and widths follow the real SWIR bands (CH4 2.3 and 1.65 um,
-    CO2 2.0 and 1.6 um, H2O 1.4, 1.9 and 2.7 um) and intensities are tuned so
-    that band depths at ~7 nm resolution are of realistic magnitude. The fine
-    structure is invented.
+    Band centres follow the real VNIR-SWIR bands (H2O 0.72, 0.82, 0.94, 1.14,
+    1.38, 1.88 and 2.7 um; O2 0.69, 0.76 and 1.27 um; CO2 1.6 and 2.0 um; CH4
+    1.66 and 2.3 um) and intensities are tuned so that band depths at ~10 nm
+    resolution are of realistic magnitude. The fine structure is invented.
     """
     rng = np.random.default_rng(seed + sum(map(ord, gas)))
     nus, ss = [], []
@@ -135,10 +138,18 @@ def demo_linelist(gas: str, seed: int = 0) -> LineList:
         rot_band(6228.0, 0.39, 1.3e-23, 60)  # 1.6 um
         rot_band(6348.0, 0.39, 1.7e-23, 60)
     elif gas == "H2O":
-        random_band(5330.0, 110.0, 8.0e-20, 1500)  # 1.88 um
+        random_band(13830.0, 90.0, 3.0e-21, 600)  # 0.72 um
+        random_band(12200.0, 100.0, 2.0e-21, 600)  # 0.82 um
+        random_band(10650.0, 120.0, 1.0e-20, 1200)  # 0.94 um
+        random_band(8800.0, 130.0, 7.0e-21, 1200)  # 1.14 um
         random_band(7250.0, 140.0, 6.0e-20, 1500)  # 1.38 um
+        random_band(5330.0, 110.0, 8.0e-20, 1500)  # 1.88 um
         random_band(3756.0, 160.0, 8.0e-18, 1500)  # 2.7 um
         random_band(4400.0, 250.0, 1.0e-22, 600)  # weak lines across 2.1-2.5 um
+    elif gas == "O2":
+        rot_band(13120.0, 1.44, 2.2e-22, 35)  # A band, 0.76 um
+        rot_band(14530.0, 1.44, 1.5e-23, 35)  # B band, 0.69 um
+        rot_band(7880.0, 1.44, 1.0e-23, 35)  # 1.27 um
     else:
         raise ValueError(f"No demo line list for {gas}")
     nu = np.concatenate(nus)
@@ -212,7 +223,7 @@ def cross_section(
 
 @dataclass
 class CrossSectionTable:
-    """A tabulated cross section sigma(lambda) [cm^2/molecule] (UV-VIS absorbers)."""
+    """A tabulated cross section sigma(lambda) [cm^2/molecule] (O3, NO2, SO2...)."""
 
     gas: str
     wavelength_nm: np.ndarray
@@ -236,8 +247,8 @@ class CrossSectionTable:
 
 
 def demo_uvvis_cross_section(gas: str) -> CrossSectionTable:
-    """Synthetic NO2/SO2-like cross sections for offline demos. *Not* real data."""
-    wl = np.arange(280.0, 560.0, 0.02)
+    """Synthetic O3/NO2/SO2-like cross sections for offline demos. *Not* real data."""
+    wl = np.arange(250.0, 2510.0, 0.02) if gas == "O3" else np.arange(280.0, 560.0, 0.02)
     if gas == "NO2":
         envelope = 4.5e-19 * np.exp(-0.5 * ((wl - 420.0) / 70.0) ** 2)
         bands = 1.0 + 0.45 * np.sin(2 * np.pi * (wl - 400.0) / 7.3) * np.exp(-(((wl - 440) / 60) ** 2))
@@ -246,7 +257,7 @@ def demo_uvvis_cross_section(gas: str) -> CrossSectionTable:
         envelope = 1.0e-18 * np.exp(-0.5 * ((wl - 295.0) / 12.0) ** 2)
         bands = 1.0 + 0.6 * np.sin(2 * np.pi * (wl - 300.0) / 2.5)
         sigma = np.where(wl < 330, envelope * bands, 0.0)
-    elif gas == "O3":
+    elif gas == "O3":  # Hartley band + Chappuis band
         sigma = 1.1e-17 * np.exp(-0.5 * ((wl - 255.0) / 18.0) ** 2) + 5e-21 * np.exp(-0.5 * ((wl - 600.0) / 60.0) ** 2)
     else:
         raise ValueError(f"No demo UV-VIS cross section for {gas}")
@@ -254,27 +265,22 @@ def demo_uvvis_cross_section(gas: str) -> CrossSectionTable:
 
 
 class SpectralDatabase:
-    """Monochromatic optical properties for a set of gases on a wavenumber grid.
+    """Monochromatic gas optical depths on a uniform wavenumber grid.
 
-    Stores, for every gas, the layer optical depths of the background
-    atmosphere (vertical) and the cross section at the plume layer
-    (surface pressure/temperature by default).
+    For every gas the database stores the vertical optical depth of the whole
+    atmosphere, the cross section at the surface layer (for column
+    perturbations), and the cumulative column fraction with altitude, which
+    gives the optical depth below an airborne or drone sensor.
     """
 
-    def __init__(
-        self,
-        nu: np.ndarray,
-        gases: list[str],
-        layer_tau: dict,
-        plume_sigma: dict,
-        z_bounds_km: np.ndarray,
-        synthetic: bool,
-    ):
+    def __init__(self, nu, gases, tau_vertical, sigma_surface, z_km, column_fraction, column_total, synthetic):
         self.nu = nu
         self.gases = list(gases)
-        self.layer_tau = layer_tau  # gas -> (n_layers, n_nu)
-        self.plume_sigma = plume_sigma  # gas -> (n_nu,)
-        self.z_bounds_km = z_bounds_km
+        self.tau_vertical = tau_vertical  # gas -> (n_nu,)
+        self.sigma_surface = sigma_surface  # gas -> (n_nu,) cm^2/molecule
+        self.z_km = z_km  # altitude grid of the cumulative fractions
+        self.column_fraction = column_fraction  # gas -> (n_z,) fraction of column below z
+        self.column_total = column_total  # gas -> molecules/cm^2
         self.synthetic = synthetic
 
     @property
@@ -285,58 +291,88 @@ class SpectralDatabase:
     def build(
         cls,
         atmosphere: Atmosphere,
-        wl_range_nm: tuple[float, float] = (2100.0, 2450.0),
-        gases: tuple[str, ...] = ("CH4", "CO2", "H2O"),
+        wl_range_nm: tuple[float, float] = (380.0, 2500.0),
+        gases: tuple[str, ...] = ("H2O", "O2", "CO2", "CH4", "O3"),
         linelists: dict[str, LineList] | None = None,
-        dnu: float = 0.02,
-        plume_layer: int = 0,
+        cross_sections: dict[str, CrossSectionTable] | None = None,
+        dnu: float = 0.05,
         s_min: float = 1e-26,
+        wing_cutoff: float = 15.0,
     ) -> SpectralDatabase:
-        """Compute the database. Without ``linelists``, demo spectroscopy is used."""
+        """Compute the database.
+
+        Line absorbers use ``linelists`` (HITRAN), cross-section absorbers use
+        ``cross_sections``. Anything missing falls back to the synthetic demo
+        spectroscopy, and the database is flagged ``synthetic``.
+        """
         nu_min, nu_max = 1e7 / wl_range_nm[1], 1e7 / wl_range_nm[0]
         nu = np.arange(nu_min - 1.0, nu_max + 1.0, dnu)
+        wl = 1e7 / nu
         linelists = dict(linelists or {})
+        cross_sections = dict(cross_sections or {})
         synthetic = False
+        tau_v, sig_s, frac, total = {}, {}, {}, {}
+        zb = atmosphere.z_bounds_km
         for g in gases:
-            if g not in linelists:
-                linelists[g] = demo_linelist(g)
-            synthetic |= linelists[g].synthetic
+            col = atmosphere.gas_column(g)
+            total[g] = float(col.sum())
+            frac[g] = np.concatenate([[0.0], np.cumsum(col)]) / col.sum()
+            if g in _XSEC_GASES:
+                table = cross_sections.get(g) or demo_uvvis_cross_section(g)
+                synthetic |= table.synthetic
+                sig = table(wl)
+                tau_v[g] = (sig * col.sum()).astype(np.float32)
+                sig_s[g] = sig.astype(np.float32)
+                continue
+            ll = linelists.get(g) or demo_linelist(g)
+            synthetic |= ll.synthetic
+            ll = ll.select(nu_min - wing_cutoff, nu_max + wing_cutoff, s_min)
+            tau = np.zeros_like(nu)
+            for i in range(atmosphere.n_layers):
+                sig = cross_section(
+                    ll,
+                    nu,
+                    atmosphere.pressure[i],
+                    atmosphere.temperature[i],
+                    vmr=atmosphere.vmr[g][i],
+                    wing_cutoff=wing_cutoff,
+                )
+                tau += sig * col[i]
+                if i == 0:
+                    sig_s[g] = sig.astype(np.float32)
+            tau_v[g] = tau.astype(np.float32)
         if synthetic:
             warnings.warn(
                 "SpectralDatabase uses synthetic demo spectroscopy; results are illustrative only.", stacklevel=2
             )
-        layer_tau, plume_sigma = {}, {}
-        for g in gases:
-            ll = linelists[g].select(nu_min - 30, nu_max + 30, s_min)
-            col = atmosphere.gas_column(g)
-            taus = np.empty((atmosphere.n_layers, nu.size))
-            for i in range(atmosphere.n_layers):
-                sig = cross_section(ll, nu, atmosphere.pressure[i], atmosphere.temperature[i], vmr=atmosphere.vmr[g][i])
-                taus[i] = sig * col[i]
-                if i == plume_layer:
-                    plume_sigma[g] = sig
-            layer_tau[g] = taus
-        return cls(nu, gases, layer_tau, plume_sigma, atmosphere.z_bounds_km.copy(), synthetic)
+        return cls(nu, gases, tau_v, sig_s, zb.copy(), frac, total, synthetic)
+
+    def column_fraction_below(self, gas: str, altitude_m: float | None) -> float:
+        """Fraction of the gas column below ``altitude_m`` (1 for ``None``: space-borne)."""
+        if altitude_m is None:
+            return 1.0
+        return float(np.interp(altitude_m / 1e3, self.z_km, self.column_fraction[gas]))
 
     def vertical_tau(self, gas: str, below_altitude_m: float | None = None) -> np.ndarray:
-        """Background vertical optical depth, optionally only below an altitude."""
-        taus = self.layer_tau[gas]
-        if below_altitude_m is None:
-            return taus.sum(axis=0)
-        zb = self.z_bounds_km * 1e3
-        frac = np.clip((below_altitude_m - zb[:-1]) / (zb[1:] - zb[:-1]), 0.0, 1.0)
-        return frac @ taus
+        """Vertical optical depth, optionally only of the air below an altitude.
+
+        The partial column assumes the spectral shape of the full column, which
+        neglects the narrower upper-layer lines; adequate at instrument resolution.
+        """
+        return self.tau_vertical[gas].astype(float) * self.column_fraction_below(gas, below_altitude_m)
 
     def save(self, path: str | Path) -> None:
         arrays = {
             "nu": self.nu,
-            "z_bounds_km": self.z_bounds_km,
+            "z_km": self.z_km,
             "gases": np.array(self.gases),
             "synthetic": np.array(self.synthetic),
         }
         for g in self.gases:
-            arrays[f"tau_{g}"] = self.layer_tau[g].astype(np.float32)
-            arrays[f"sigma_{g}"] = self.plume_sigma[g]
+            arrays[f"tau_{g}"] = self.tau_vertical[g]
+            arrays[f"sigma_{g}"] = self.sigma_surface[g]
+            arrays[f"frac_{g}"] = self.column_fraction[g]
+            arrays[f"total_{g}"] = np.array(self.column_total[g])
         np.savez_compressed(path, **arrays)
 
     @classmethod
@@ -346,8 +382,10 @@ class SpectralDatabase:
         return cls(
             d["nu"],
             gases,
-            {g: d[f"tau_{g}"].astype(float) for g in gases},
+            {g: d[f"tau_{g}"] for g in gases},
             {g: d[f"sigma_{g}"] for g in gases},
-            d["z_bounds_km"],
+            d["z_km"],
+            {g: d[f"frac_{g}"] for g in gases},
+            {g: float(d[f"total_{g}"]) for g in gases},
             bool(d["synthetic"]),
         )

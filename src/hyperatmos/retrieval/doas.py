@@ -1,17 +1,19 @@
 """Differential optical absorption spectroscopy (DOAS) for UV-visible imagers.
 
 Retrieves slant column densities (SCDs) of NO2, SO2 and similar absorbers
-from a measured spectrum ``I`` and a plume-free reference ``I0`` (for an
-imaging spectrometer, typically the mean of upwind or off-plume pixels in the
-same detector column)::
+from a measured spectrum ``I`` and a reference ``I0`` (for an imaging
+spectrometer, typically the mean of clean-background pixels in the same
+detector column, or a zenith/solar reference)::
 
     ln(I0 / I) = sum_g sigma_g * SCD_g + P(lambda) [+ shift term]
 
 ``P`` is a low-order polynomial absorbing broadband extinction and surface
 effects. A first-order wavelength shift of the measurement is optionally
 fitted through the derivative of ``ln I``. Vertical columns follow as
-``VCD = SCD / AMF``; for a near-surface ship or stack plume observed from a
-drone, the geometric AMF ``1/mu0 + 1/mu_v`` is the usual first estimate.
+``VCD = SCD / AMF``, where the air-mass factor comes from radiative transfer;
+for absorbers in the boundary layer observed from low altitude the geometric
+AMF ``1/mu0 + 1/mu_v`` is the usual first estimate. The retrieved columns are
+then differential with respect to the reference.
 """
 
 from __future__ import annotations
@@ -101,10 +103,10 @@ def doas_image(
     gas: str = "NO2",
     **kwargs,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """DOAS over a (rows, cols, bands) cube with a per-column plume-free reference.
+    """DOAS over a (rows, cols, bands) cube with a per-column reference spectrum.
 
-    ``reference_rows`` selects along-track lines assumed free of the plume
-    (e.g. upwind of a ship); their mean in each column is ``I0``.
+    ``reference_rows`` selects along-track lines taken as the clean background
+    (e.g. a rural part of the flight line); their mean in each column is ``I0``.
     """
     rows, cols, _ = cube.shape
     scd = np.full((rows, cols), np.nan)

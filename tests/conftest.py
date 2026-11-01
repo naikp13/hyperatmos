@@ -1,17 +1,17 @@
 import numpy as np
 import pytest
 
-from plumefit import ForwardModel, Geometry, SpectralDatabase, preset, standard_atmosphere
+from hyperatmos import Geometry, RadiativeTransferModel, SpectralDatabase, preset, standard_atmosphere
 
 
 @pytest.fixture(scope="session")
 def db():
-    return SpectralDatabase.build(standard_atmosphere(), (2100.0, 2450.0), dnu=0.04)
+    return SpectralDatabase.build(standard_atmosphere(), (400.0, 2500.0), dnu=0.1)
 
 
 @pytest.fixture(scope="session")
-def fm(db):
-    return ForwardModel(db, preset("EMIT"), Geometry(30.0, 0.0))
+def rtm(db):
+    return RadiativeTransferModel(db, preset("EMIT"), Geometry(35.0, 5.0, 30.0))
 
 
 @pytest.fixture

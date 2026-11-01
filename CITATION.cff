@@ -1,16 +1,17 @@
 cff-version: 1.2.0
-message: "If you use plumefit, please cite it as below."
-title: "plumefit: trace-gas plume retrievals for drone and satellite imaging spectrometers"
+message: "If you use hyperatmos, please cite it as below."
+title: "hyperatmos: radiative transfer and atmospheric correction for drone and satellite imaging spectrometers"
 type: software
 authors:
   - alias: naikp13
 license: Apache-2.0
-repository-code: "https://github.com/naikp13/plumefit"
+repository-code: "https://github.com/naikp13/hyperatmos"
 version: 0.1.0
-date-released: 2026-10-19
+date-released: 2026-11-01
 keywords:
   - imaging spectroscopy
-  - methane
+  - radiative transfer
+  - atmospheric correction
   - optimal estimation
-  - DOAS
+  - drone remote sensing
   - ISOFIT

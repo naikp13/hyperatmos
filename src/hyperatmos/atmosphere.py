@@ -1,11 +1,11 @@
 """Layered background atmospheres.
 
 A deliberately small model: a US-1976-like temperature profile, hydrostatic
-pressure, and simple gas profiles (well mixed CO2/CH4, exponential H2O).
-It is good enough to compute background optical depths and the
-pressure/temperature at which a near-surface plume absorbs. For operational
-work, replace it with a profile from a reanalysis (e.g. ERA5) or with the
-atmospheric state that ISOFIT retrieved (see :mod:`plumefit.isofit_bridge`).
+pressure, and simple gas profiles (well mixed O2/CO2/CH4, exponential H2O,
+a stratospheric O3 layer). It is enough to compute band-averaged gas
+transmittances. For operational work, replace it with a reanalysis profile
+(e.g. ERA5), or scale it to the water vapour that ISOFIT retrieved (see
+:mod:`hyperatmos.isofit_interop`).
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from .constants import K_BOLTZMANN
+from .constants import DOBSON_UNIT, K_BOLTZMANN, MOLAR_MASS, N_AVOGADRO
 
 G0 = 9.80665
 R_AIR = 287.05
@@ -88,28 +88,47 @@ class Atmosphere:
         frac = np.clip((altitude_m - zb[:-1]) / (zb[1:] - zb[:-1]), 0.0, 1.0)
         return float(np.sum(col * frac) / np.sum(col))
 
+    def set_column(self, gas: str, molec_cm2: float) -> None:
+        """Rescale a gas profile to a total column [molecules/cm^2], keeping its shape."""
+        self.vmr[gas] = self.vmr[gas] * molec_cm2 / self.gas_column(gas).sum()
+
     def number_density(self) -> np.ndarray:
         """Air number density at layer centres [molecules/cm^3]."""
         return self.pressure / (K_BOLTZMANN * self.temperature) * 1e-6
 
 
 def standard_atmosphere(
+    h2o_g_cm2: float = 1.5,
+    o3_du: float = 300.0,
     co2_ppm: float = 420.0,
     ch4_ppm: float = 1.92,
-    h2o_surface_ppm: float = 7750.0,
     h2o_scale_height_km: float = 2.0,
     surface_pressure: float = 101325.0,
     surface_temperature: float = 288.15,
+    fine: bool = False,
 ) -> Atmosphere:
-    """A mid-latitude-like default atmosphere, 0-40 km in 30 layers."""
-    zb = np.concatenate([np.arange(0.0, 20.0, 1.0), np.arange(20.0, 40.1, 2.0)])
+    """A mid-latitude-like atmosphere from the surface to 40 km.
+
+    ``fine=False`` uses 15 layers (enough for band-averaged transmittance);
+    ``fine=True`` uses 30.
+    """
+    if fine:
+        zb = np.concatenate([np.arange(0.0, 20.0, 1.0), np.arange(20.0, 40.1, 2.0)])
+    else:
+        zb = np.array([0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0, 8.0, 10.0, 12.0, 15.0, 20.0, 25.0, 30.0, 40.0])
     atm = Atmosphere(zb, surface_pressure, surface_temperature)
     zc = atm.z_centres_km
+    h2o_shape = np.maximum(np.exp(-zc / h2o_scale_height_km), 1e-3)
+    o3_shape = np.exp(-0.5 * ((zc - 22.0) / 6.0) ** 2) + 1e-3
     atm.vmr = {
         "CO2": np.full(atm.n_layers, co2_ppm * 1e-6),
         "CH4": np.full(atm.n_layers, ch4_ppm * 1e-6),
-        "H2O": np.maximum(h2o_surface_ppm * 1e-6 * np.exp(-zc / h2o_scale_height_km), 3e-6),
+        "O2": np.full(atm.n_layers, 0.2095),
+        "H2O": h2o_shape,
+        "O3": o3_shape,
         "NO2": np.full(atm.n_layers, 1e-10),
         "SO2": np.full(atm.n_layers, 1e-11),
     }
+    atm.set_column("H2O", h2o_g_cm2 / (MOLAR_MASS["H2O"] * 1e3) * N_AVOGADRO)
+    atm.set_column("O3", o3_du * DOBSON_UNIT)
     return atm

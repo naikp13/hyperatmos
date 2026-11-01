@@ -1,17 +1,19 @@
-"""Column-wise matched filter for gas enhancement maps.
+"""Column-wise clutter matched filter for absorber anomaly maps.
 
-Implements the clutter matched filter used for AVIRIS-NG and EMIT methane
-products (Thompson et al., 2015, AMT; Foote et al., 2020, IEEE TGRS), with
-three practical options:
+Detects pixels whose spectra deviate from the scene background along a known
+absorption signature, such as a local excess of water vapour or of a trace
+gas. This is the clutter matched filter of Thompson et al. (2015, AMT) and
+Foote et al. (2020, IEEE TGRS), with three practical options:
 
 * statistics per detector column (or groups of columns), which absorbs
   pushbroom striping and cross-track variations of the instrument response;
 * shrinkage of the background covariance for numerical stability;
-* iterative removal of plume pixels from the background statistics, which
-  reduces the well-known under-estimation of strong plumes.
+* iterative removal of anomalous pixels from the background statistics.
 
-The output is the enhancement in ppm·m and its 1-sigma uncertainty from the
-background clutter.
+The output is in the units of the signature (e.g. a fractional column change
+when the signature comes from
+:meth:`hyperatmos.rtm.RadiativeTransferModel.absorption_signature`) with its
+1-sigma uncertainty from the background clutter.
 """
 
 from __future__ import annotations
@@ -23,8 +25,8 @@ import numpy as np
 
 @dataclass
 class MatchedFilterResult:
-    enhancement: np.ndarray  # (rows, cols) ppm·m
-    uncertainty: np.ndarray  # (rows, cols) ppm·m, 1-sigma from clutter
+    enhancement: np.ndarray  # (rows, cols), units of the signature
+    uncertainty: np.ndarray  # (rows, cols), 1-sigma from clutter
     albedo: np.ndarray  # (rows, cols) relative brightness factor
 
 
@@ -49,8 +51,8 @@ def matched_filter(
     Parameters
     ----------
     radiance : (rows, cols, bands) array, rows are along-track lines.
-    unit_absorption : (bands,) d ln L / d(dX) in 1/ppm·m, from
-        :meth:`plumefit.forward.ForwardModel.unit_absorption_spectrum`.
+    unit_absorption : (bands,) d ln L / d(amount), e.g. from
+        :meth:`hyperatmos.rtm.RadiativeTransferModel.absorption_signature`.
     column_group : number of adjacent columns pooled into one set of statistics.
     n_iter : passes; after each, pixels above ``exclude_sigma`` are left out of
         the background mean/covariance.

@@ -1,19 +1,23 @@
 import numpy as np
 import pytest
 
-from plumefit import constants as c
-from plumefit.spectroscopy import LineList, SpectralDatabase, cross_section, read_hitran_par
+from hyperatmos import constants as c
+from hyperatmos import standard_atmosphere
+from hyperatmos.spectroscopy import LineList, SpectralDatabase, cross_section, read_hitran_par
 
 
-def test_ppmm_roundtrip():
-    assert c.molec_cm2_to_ppmm(c.ppmm_to_molec_cm2(1234.5)) == pytest.approx(1234.5)
-    assert c.kg_m2_to_ppmm(c.ppmm_to_kg_m2(1000.0, "CH4"), "CH4") == pytest.approx(1000.0)
+def test_h2o_unit_roundtrip():
+    assert c.molec_cm2_to_h2o_g_cm2(c.h2o_g_cm2_to_molec_cm2(1.7)) == pytest.approx(1.7)
+    # 1 g/cm^2 of water vapour is 3.343e22 molecules/cm^2
+    assert c.h2o_g_cm2_to_molec_cm2(1.0) == pytest.approx(3.343e22, rel=1e-3)
 
 
-def test_ppmm_to_mass_reference_value():
-    # 1000 ppm m CH4 at 1 atm, 288.15 K: 2.547e18 molec/cm^2 -> 6.78e-4 kg/m^2
-    assert c.ppmm_to_molec_cm2(1000.0) == pytest.approx(2.547e18, rel=1e-3)
-    assert c.ppmm_to_kg_m2(1000.0, "CH4") == pytest.approx(6.785e-4, rel=2e-3)
+def test_standard_atmosphere_columns():
+    atm = standard_atmosphere(h2o_g_cm2=2.0, o3_du=320.0)
+    assert c.molec_cm2_to_h2o_g_cm2(atm.gas_column("H2O").sum()) == pytest.approx(2.0)
+    assert atm.gas_column("O3").sum() / c.DOBSON_UNIT == pytest.approx(320.0)
+    # O2 column of a 1 atm atmosphere is about 4.5e24 molecules/cm^2
+    assert atm.gas_column("O2").sum() == pytest.approx(4.5e24, rel=0.03)
 
 
 def _one_line(nu0=4300.0, s=1e-21):
@@ -69,12 +73,12 @@ def test_database_roundtrip(db, tmp_path):
     db.save(p)
     db2 = SpectralDatabase.load(p)
     assert db2.gases == db.gases and db2.synthetic
-    np.testing.assert_allclose(db2.vertical_tau("CH4"), db.vertical_tau("CH4"), rtol=1e-5)
+    np.testing.assert_allclose(db2.vertical_tau("H2O"), db.vertical_tau("H2O"), rtol=1e-5)
+    assert db2.column_total["O2"] == pytest.approx(db.column_total["O2"])
 
 
 def test_partial_column_below_sensor(db):
-    full = db.vertical_tau("CH4")
-    below = db.vertical_tau("CH4", below_altitude_m=500.0)
-    assert np.all(below <= full + 1e-12)
-    # ~6% of a well-mixed column lies below 500 m
-    assert below.sum() / full.sum() == pytest.approx(0.06, abs=0.015)
+    # ~6% of a well-mixed column lies below 500 m; water vapour is more concentrated
+    assert db.column_fraction_below("CO2", 500.0) == pytest.approx(0.06, abs=0.01)
+    assert db.column_fraction_below("H2O", 500.0) > 0.15
+    assert db.column_fraction_below("CO2", None) == 1.0
